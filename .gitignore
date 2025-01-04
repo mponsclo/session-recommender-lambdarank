@@ -47,3 +47,7 @@ Thumbs.db
 *.jpg
 *.jpeg
 *.png
+
+# Data Files
+*.csv
+*.pkl
