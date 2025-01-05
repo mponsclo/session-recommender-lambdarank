@@ -5,7 +5,6 @@ import pandas as pd
 # Directory for saving files
 data_dir = os.path.join(os.path.dirname(__file__), '../../data/raw')
 
-
 # Path to the CSV file
 products_path = os.path.join(data_dir, 'products.csv')
 users_path = os.path.join(data_dir, 'users.csv')
@@ -190,20 +189,18 @@ def get_user_with_most_interactions_in_sessions_from_device(con, csv_file_path, 
   
   query = f"""
     WITH top_users_by_country AS (
-      SELECT
-        user_id,
-        country,
-        F,
-        ROW_NUMBER() OVER (PARTITION BY country ORDER BY F DESC) AS rank
+      SELECT user_id
       FROM read_csv_auto('{csv_file_path}')
+      QUALIFY true
+        AND ROW_NUMBER() OVER (PARTITION BY country ORDER BY F DESC) <= 3
     )
 
     SELECT
-      u.user_id,
-      COUNT(DISTINCT s.partnumber) AS interaction_count
+      u.user_id
+      , COUNT(DISTINCT s.partnumber) AS interaction_count
     FROM top_users_by_country u
     INNER JOIN read_csv_auto('{csv_file_path2}') s ON u.user_id = s.user_id
-    WHERE u.rank <= 3
+    WHERE true
       AND s.device_type = 3
     GROUP BY u.user_id
     ORDER BY interaction_count DESC
@@ -213,12 +210,46 @@ def get_user_with_most_interactions_in_sessions_from_device(con, csv_file_path, 
   result = con.execute(query).fetchdf()
   return result
 
+def get_unique_family_identifiers_outside_user_country(con, csv_file_path, csv_file_path2, csv_file_path3):
+  """
+  For interactions that occurred outside the user's country of residence, how many 
+  unique family identifiers are there? Take into account any registered country for 
+  each user, as there may be more than one country per user.
+  """
 
+  query = f"""
+    WITH user_countries AS (
+      SELECT 
+        user_id
+        , country
+      FROM read_csv_auto('{csv_file_path}')
+    ),
+    
+    product_interactions AS (
+      SELECT
+        DISTINCT partnumber
+      FROM read_csv_auto('{csv_file_path2}') s
+      LEFT JOIN user_countries u ON s.user_id = u.user_id
+      WHERE true
+        AND s.country != u.country
+        AND s.user_id IS NOT NULL
+    )
 
-# Get the product with the lowest family code with a discount
+    SELECT
+      COUNT(DISTINCT family) AS unique_family_count
+    FROM read_csv_auto('{csv_file_path3}')
+    INNER JOIN product_interactions pi ON read_csv_auto.partnumber = pi.partnumber
+  """
+
+  result = con.execute(query).fetchdf()
+  return result
+
+# Execute the queries
+
 # result = get_product_with_lowest_family_code_with_discount(con, products_path)
 # result = get_user_with_lowest_purchase_frequency(con, users_path)
 # result = get_average_visits_before_adding_to_cart(con, train_path) # TODO: Fix the query
 # result = get_device_most_frequently_used_for_purchases(con, products_path, train_path)
-result = get_user_with_most_interactions_in_sessions_from_device(con, users_path, train_path)
+# result = get_user_with_most_interactions_in_sessions_from_device(con, users_path, train_path)
+result = get_unique_family_identifiers_outside_user_country(con, users_path, train_path, products_path)
 print(result)
