@@ -72,79 +72,52 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
   """
   
   query = f"""
-    WITH add_to_cart_events AS (
-      SELECT
+    WITH base_1 AS (
+    SELECT 
         session_id,
+        date,
+        timestamp_local,
+        add_to_cart,
         user_id,
+        country,
         partnumber,
-        timestamp_local AS add_to_cart_time,
-        ROW_NUMBER() OVER (PARTITION BY session_id, user_id, partnumber ORDER BY timestamp_local) AS add_to_cart_event_id
-      FROM read_csv_auto('{csv_file_path}')
-      WHERE true
-        AND add_to_cart = 1
-        AND user_id = 324152.0
-        AND user_id is not null
-        AND partnumber = 23268
-    ),
+        device_type,
+        pagetype,
+        ROW_NUMBER() OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local) AS row_num,
+        SUM(add_to_cart) OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cart_event_num
+    FROM read_csv_auto('{csv_file_path}')
+  ),
 
-    visits_with_cart_mapping AS (
-      SELECT
-          v.session_id,
-          v.partnumber,
-          v.user_id,
-          v.timestamp_local AS visit_time,
-          c.add_to_cart_time,
-          c.add_to_cart_event_id
-      FROM read_csv_auto('{csv_file_path}') v
-      LEFT JOIN add_to_cart_events c
-          ON v.session_id = c.session_id
-          AND v.user_id = c.user_id
-          AND v.partnumber = c.partnumber
-          AND v.timestamp_local < c.add_to_cart_time -- Visits must be before the add-to-cart event
-      WHERE true
-        AND v.add_to_cart = 0
-        AND v.user_id = 324152.0
-        AND v.user_id is not null
-        AND v.partnumber = 23268
-    ),
+  base_2 AS (
+      SELECT 
+          partnumber,
+          cart_event_num,
+          SUM(CASE WHEN add_to_cart = 0 AND cart_event_num = cart_event_num THEN 1 ELSE 0 END) AS visits_before_cart
+      FROM base_1
+      GROUP BY partnumber, cart_event_num
+  ),
 
-    pre_cart_visits AS (
-        SELECT
-            session_id,
-            user_id,
-            partnumber,
-            add_to_cart_event_id,
-            COUNT(*) AS pre_cart_visit_count
-        FROM visits_with_cart_mapping
-        GROUP BY session_id, user_id, partnumber, add_to_cart_event_id
-    ),
+  output AS (
+      SELECT 
+          AVG(visits_before_cart * 1.0) AS avg_visits_before_cart
+      FROM base_2
+  )
 
-    base AS (
-      SELECT
-        AVG(pre_cart_visit_count) AS avg_pre_cart_visits
-      FROM pre_cart_visits
-      WHERE true
-        --AND add_to_cart = 1
-        AND user_id = 324152.0
-        AND user_id is not null
-        AND partnumber = 23268
-    )
-
-    SELECT *
-    FROM visits_with_cart_mapping
+  SELECT ROUND(avg_visits_before_cart, 2) AS avg_visits_before_cart
+  FROM output
   """
 
   query2 = f"""
-    --SELECT user_id, partnumber, MAX(add_to_cart) AS add_to_cart, COUNT(*) AS visit_count
+    --SELECT user_id, partnumber, MAX(add_to_cart) AS add_to_cart, COUNT(*) AS visit_count, SUM(add_to_cart) AS add_to_cart_count
     SELECT *
     FROM read_csv_auto('{csv_file_path}')
     WHERE true
       --AND add_to_cart = 1
-      AND user_id = 324152.0
+      AND user_id = 262372.0
       AND user_id is not null
-      AND partnumber = 23268
+      AND partnumber = 10048
     --GROUP BY user_id, partnumber
-    --HAVING MAX(add_to_cart) = 1 AND COUNT(*) = 11
+    --HAVING MAX(add_to_cart) = 1 AND COUNT(*) = 11 AND SUM(add_to_cart) = 2
     ORDER BY timestamp_local ASC
   """
 
