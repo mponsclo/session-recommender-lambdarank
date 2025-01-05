@@ -251,7 +251,55 @@ def get_unique_family_identifiers_outside_user_country(con, csv_file_path, csv_f
   return result
 
 # QUERY 7
+def get_most_frequent_page_type_for_family_added_to_cart(con, csv_file_path, csv_file_path2):
+  """
+  Among interactions from the first 7 days of June, which is the most frequent 
+  page type where each family is added to the cart? Return it in the following 
+  format: `{'('family'): int('most_frequent_pagetype')}`. In case of a tie, 
+  return the smallest pagetype.
+  """
 
+  query = f"""
+    WITH june_data AS (
+      SELECT
+        family,
+        pagetype,
+        COUNT(*) AS page_type_count
+      FROM read_csv_auto('{csv_file_path}') sessions
+      LEFT JOIN read_csv_auto('{csv_file_path2}') products ON sessions.partnumber = products.partnumber
+      WHERE true
+        AND EXTRACT(MONTH FROM date) = 6
+        AND EXTRACT(DAY FROM date) <= 7
+        AND add_to_cart = 1
+      GROUP BY family, pagetype
+    )
+
+    SELECT
+      family
+      , CAST(pagetype AS INT) AS pagetype
+    FROM june_data
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY family ORDER BY page_type_count DESC, pagetype ASC) = 1
+  """
+
+  query2 = f"""
+    SELECT family, pagetype, COUNT(*) AS page_type_count
+    FROM read_csv_auto('{csv_file_path}') sessions
+      LEFT JOIN read_csv_auto('{csv_file_path2}') products ON sessions.partnumber = products.partnumber
+    WHERE true
+        AND EXTRACT(MONTH FROM date) = 6
+        AND EXTRACT(DAY FROM date) <= 7
+        AND add_to_cart = 1
+        AND family = 92
+    GROUP BY family, pagetype
+    ORDER BY page_type_count DESC, pagetype ASC
+
+  """
+
+  result = con.execute(query).fetchdf()
+  result_dict = {str(row['family']): int(row['pagetype']) for _, row in result.iterrows()}
+  return result_dict
+
+  # return result
 
 ## Execute the queries
 # result = get_product_with_lowest_family_code_with_discount(con, products_path)
@@ -259,5 +307,6 @@ def get_unique_family_identifiers_outside_user_country(con, csv_file_path, csv_f
 # result = get_average_visits_before_adding_to_cart(con, train_path) # TODO: Fix the query
 # result = get_device_most_frequently_used_for_purchases(con, products_path, train_path)
 # result = get_user_with_most_interactions_in_sessions_from_device(con, users_path, train_path)
-result = get_unique_family_identifiers_outside_user_country(con, users_path, train_path, products_path)
+# result = get_unique_family_identifiers_outside_user_country(con, users_path, train_path, products_path)
+result = get_most_frequent_page_type_for_family_added_to_cart(con, train_path, products_path)
 print(result)
