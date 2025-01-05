@@ -95,7 +95,7 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
     FROM read_csv_auto('{csv_file_path}') AS src
     INNER JOIN products_added_to_cart ON src.partnumber = products_added_to_cart.partnumber
     WHERE true
-      AND user_id IS NOT NULL
+      --AND user_id IS NOT NULL
   ),
 
   base_2 AS (
