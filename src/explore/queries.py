@@ -9,6 +9,7 @@ data_dir = os.path.join(os.path.dirname(__file__), '../../data/raw')
 # Path to the CSV file
 products_path = os.path.join(data_dir, 'products.csv')
 users_path = os.path.join(data_dir, 'users.csv')
+train_path = os.path.join(data_dir, 'train.csv')
 
 # Create a DuckDB connection
 con = duckdb.connect()
@@ -61,7 +62,38 @@ def get_user_with_lowest_purchase_frequency(con, csv_file_path):
   result = con.execute(query).fetchdf()
   return result
 
+def get_average_visits_before_adding_to_cart(con, csv_file_path):
+  """
+  Among the products that were added to the cart at least once, 
+  how many times is a product visited before it is added to the cart on average? 
+  Give the answer with 2 decimals.
+  """
+  
+  query = f"""
+    WITH user_product_visits AS (
+      SELECT user_id, partnumber, COUNT(*) AS visit_count
+      FROM read_csv_auto('{csv_file_path}')
+      GROUP BY user_id, partnumber
+    ),
+    user_product_adds AS (
+      SELECT DISTINCT partnumber
+      FROM read_csv_auto('{csv_file_path}')
+      WHERE add_to_cart = 1
+    ),
+    visits_before_cart AS (
+      SELECT upv.user_id, upv.partnumber, upv.visit_count
+      FROM user_product_visits upv
+      INNER JOIN user_product_adds upa ON upv.partnumber = upa.partnumber
+    )
+    SELECT ROUND(AVG(visit_count), 2) AS avg_visits_before_cart
+    FROM visits_before_cart
+  """
+
+  result = con.execute(query).fetchdf()
+  return result
+
 # Get the product with the lowest family code with a discount
 # result = get_product_with_lowest_family_code_with_discount(con, products_path)
-result = get_user_with_lowest_purchase_frequency(con, users_path)
+# result = get_user_with_lowest_purchase_frequency(con, users_path)
+result = get_average_visits_before_adding_to_cart(con, train_path)
 print(result)
