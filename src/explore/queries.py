@@ -13,6 +13,7 @@ train_path = os.path.join(data_dir, 'train.csv')
 # Create a DuckDB connection
 con = duckdb.connect()
 
+# QUERY 1
 def get_product_with_lowest_family_code_with_discount(con, csv_file_path):
   """
     Which product (`partnumber`) with `color_id` equal to 3 
@@ -30,6 +31,7 @@ def get_product_with_lowest_family_code_with_discount(con, csv_file_path):
   result = con.execute(query).fetchdf()
   return result
 
+# QUERY 2
 def get_user_with_lowest_purchase_frequency(con, csv_file_path):
   """
   In the country where most users have made purchases totaling less than 500 (`M`), 
@@ -61,6 +63,7 @@ def get_user_with_lowest_purchase_frequency(con, csv_file_path):
   result = con.execute(query).fetchdf()
   return result
 
+# QUERY 3
 def get_average_visits_before_adding_to_cart(con, csv_file_path):
   """
   Among the products that were added to the cart at least once, 
@@ -148,6 +151,7 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
   result = con.execute(query).fetchdf()
   return result
 
+# QUERY 4
 def get_device_most_frequently_used_for_purchases(con, csv_file_path, csv_file_path2):
   """
   Which device (`device_type`) is most frequently used by users to make purchases (`add_to_cart` = 1) 
@@ -180,6 +184,7 @@ def get_device_most_frequently_used_for_purchases(con, csv_file_path, csv_file_p
   result = con.execute(query).fetchdf()
   return result
 
+# QUERY 5
 def get_user_with_most_interactions_in_sessions_from_device(con, csv_file_path, csv_file_path2):
   """
   Among users with purchase frequency (`F`) in the top 3 within their purchase country, 
@@ -210,6 +215,7 @@ def get_user_with_most_interactions_in_sessions_from_device(con, csv_file_path, 
   result = con.execute(query).fetchdf()
   return result
 
+# QUERY 6
 def get_unique_family_identifiers_outside_user_country(con, csv_file_path, csv_file_path2, csv_file_path3):
   """
   For interactions that occurred outside the user's country of residence, how many 
@@ -229,9 +235,8 @@ def get_unique_family_identifiers_outside_user_country(con, csv_file_path, csv_f
       SELECT
         DISTINCT partnumber
       FROM read_csv_auto('{csv_file_path2}') s
-      LEFT JOIN user_countries u ON s.user_id = u.user_id
+      LEFT JOIN user_countries u ON s.user_id = u.user_id AND s.country != u.country
       WHERE true
-        AND s.country != u.country
         AND s.user_id IS NOT NULL
     )
 
@@ -244,8 +249,10 @@ def get_unique_family_identifiers_outside_user_country(con, csv_file_path, csv_f
   result = con.execute(query).fetchdf()
   return result
 
-# Execute the queries
+# QUERY 7
 
+
+## Execute the queries
 # result = get_product_with_lowest_family_code_with_discount(con, products_path)
 # result = get_user_with_lowest_purchase_frequency(con, users_path)
 # result = get_average_visits_before_adding_to_cart(con, train_path) # TODO: Fix the query
