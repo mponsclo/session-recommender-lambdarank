@@ -181,10 +181,44 @@ def get_device_most_frequently_used_for_purchases(con, csv_file_path, csv_file_p
   result = con.execute(query).fetchdf()
   return result
 
+def get_user_with_most_interactions_in_sessions_from_device(con, csv_file_path, csv_file_path2):
+  """
+  Among users with purchase frequency (`F`) in the top 3 within their purchase country, 
+  who has interacted with the most products (`partnumber`) in sessions conducted from a 
+  device with identifier 3 (`device_type` = 3)?
+  """
+  
+  query = f"""
+    WITH top_users_by_country AS (
+      SELECT
+        user_id,
+        country,
+        F,
+        ROW_NUMBER() OVER (PARTITION BY country ORDER BY F DESC) AS rank
+      FROM read_csv_auto('{csv_file_path}')
+    )
+
+    SELECT
+      u.user_id,
+      COUNT(DISTINCT s.partnumber) AS interaction_count
+    FROM top_users_by_country u
+    INNER JOIN read_csv_auto('{csv_file_path2}') s ON u.user_id = s.user_id
+    WHERE u.rank <= 3
+      AND s.device_type = 3
+    GROUP BY u.user_id
+    ORDER BY interaction_count DESC
+    LIMIT 1
+    """
+  
+  result = con.execute(query).fetchdf()
+  return result
+
+
 
 # Get the product with the lowest family code with a discount
 # result = get_product_with_lowest_family_code_with_discount(con, products_path)
 # result = get_user_with_lowest_purchase_frequency(con, users_path)
-# result = get_average_visits_before_adding_to_cart(con, train_path)
-result = get_device_most_frequently_used_for_purchases(con, products_path, train_path)
+# result = get_average_visits_before_adding_to_cart(con, train_path) # TODO: Fix the query
+# result = get_device_most_frequently_used_for_purchases(con, products_path, train_path)
+result = get_user_with_most_interactions_in_sessions_from_device(con, users_path, train_path)
 print(result)
