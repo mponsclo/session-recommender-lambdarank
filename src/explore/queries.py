@@ -71,11 +71,14 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
   
   query = f"""
     WITH user_product_visits AS (
-      SELECT user_id, partnumber, COUNT(*) AS visit_count
+      SELECT 
+        user_id
+        , partnumber
+        , SUM(CASE WHEN add_to_cart = 0 THEN 1 ELSE 0 END) AS visit_count
       FROM read_csv_auto('{csv_file_path}')
       GROUP BY user_id, partnumber
     ),
-    user_product_adds AS (
+    product_adds AS (
       SELECT DISTINCT partnumber
       FROM read_csv_auto('{csv_file_path}')
       WHERE add_to_cart = 1
@@ -83,7 +86,7 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
     visits_before_cart AS (
       SELECT upv.user_id, upv.partnumber, upv.visit_count
       FROM user_product_visits upv
-      INNER JOIN user_product_adds upa ON upv.partnumber = upa.partnumber
+      INNER JOIN product_adds upa ON upv.partnumber = upa.partnumber
     )
     SELECT ROUND(AVG(visit_count), 2) AS avg_visits_before_cart
     FROM visits_before_cart
