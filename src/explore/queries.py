@@ -72,7 +72,14 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
   """
   
   query = f"""
-  WITH base_1 AS (
+  WITH products_added_to_cart AS (
+    SELECT DISTINCT partnumber
+    FROM read_csv_auto('{csv_file_path}')
+    WHERE true
+      AND add_to_cart = 1
+  ),
+  
+  base_1 AS (
     SELECT 
       session_id,
       date,
@@ -80,12 +87,13 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
       add_to_cart,
       user_id,
       country,
-      partnumber,
+      src.partnumber,
       device_type,
       pagetype,
-      ROW_NUMBER() OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local) AS row_num,
-      SUM(add_to_cart) OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cart_event_num
-    FROM read_csv_auto('{csv_file_path}')
+      ROW_NUMBER() OVER (PARTITION BY user_id, src.partnumber ORDER BY timestamp_local) AS row_num,
+      SUM(add_to_cart) OVER (PARTITION BY user_id, src.partnumber ORDER BY timestamp_local ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cart_event_num
+    FROM read_csv_auto('{csv_file_path}') AS src
+    INNER JOIN products_added_to_cart ON src.partnumber = products_added_to_cart.partnumber
     WHERE true
       AND user_id IS NOT NULL
   ),
