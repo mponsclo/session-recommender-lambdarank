@@ -235,9 +235,10 @@ def get_unique_family_identifiers_outside_user_country(con, csv_file_path, csv_f
       SELECT
         DISTINCT partnumber
       FROM read_csv_auto('{csv_file_path2}') s
-      LEFT JOIN user_countries u ON s.user_id = u.user_id AND s.country != u.country
+      LEFT JOIN user_countries u ON s.user_id = u.user_id AND s.country = u.country
       WHERE true
         AND s.user_id IS NOT NULL
+        AND u.country IS NULL
     )
 
     SELECT
