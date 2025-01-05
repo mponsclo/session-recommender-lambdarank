@@ -72,29 +72,31 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
   """
   
   query = f"""
-    WITH base_1 AS (
+  WITH base_1 AS (
     SELECT 
-        session_id,
-        date,
-        timestamp_local,
-        add_to_cart,
-        user_id,
-        country,
-        partnumber,
-        device_type,
-        pagetype,
-        ROW_NUMBER() OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local) AS row_num,
-        SUM(add_to_cart) OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cart_event_num
+      session_id,
+      date,
+      timestamp_local,
+      add_to_cart,
+      user_id,
+      country,
+      partnumber,
+      device_type,
+      pagetype,
+      ROW_NUMBER() OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local) AS row_num,
+      SUM(add_to_cart) OVER (PARTITION BY user_id, partnumber ORDER BY timestamp_local ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cart_event_num
     FROM read_csv_auto('{csv_file_path}')
+    WHERE true
+      AND user_id IS NOT NULL
   ),
 
   base_2 AS (
-      SELECT 
-          partnumber,
-          cart_event_num,
-          SUM(CASE WHEN add_to_cart = 0 AND cart_event_num = cart_event_num THEN 1 ELSE 0 END) AS visits_before_cart
-      FROM base_1
-      GROUP BY partnumber, cart_event_num
+    SELECT 
+        partnumber,
+        cart_event_num,
+        SUM(CASE WHEN add_to_cart = 0 AND cart_event_num = cart_event_num THEN 1 ELSE 0 END) AS visits_before_cart
+    FROM base_1
+    GROUP BY partnumber, cart_event_num
   ),
 
   output AS (
