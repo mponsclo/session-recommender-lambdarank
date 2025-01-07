@@ -70,7 +70,32 @@ def get_average_visits_before_adding_to_cart(con, csv_file_path):
   how many times is a product visited before it is added to the cart on average? 
   Give the answer with 2 decimals.
   """
-  
+
+  query0 = f"""
+    WITH products_added_to_cart AS (
+      SELECT DISTINCT partnumber
+      FROM read_csv_auto('{csv_file_path}')
+      WHERE true
+        AND add_to_cart = 1
+    ),
+
+    base_1 AS (
+      SELECT
+        a.partnumber,
+        COUNT(*) AS visit_count,
+      FROM read_csv_auto('{csv_file_path}') AS a
+      INNER JOIN products_added_to_cart ON a.partnumber = products_added_to_cart.partnumber
+      WHERE true
+        --AND user_id IS NOT NULL
+        AND add_to_cart = 0
+      GROUP BY a.partnumber
+    )
+
+    SELECT
+      AVG(visit_count) AS avg_visits_before_cart
+    FROM base_1
+  """
+
   query = f"""
   WITH products_added_to_cart AS (
     SELECT DISTINCT partnumber
