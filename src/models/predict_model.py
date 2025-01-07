@@ -133,8 +133,8 @@ def save_predictions_to_json(all_predictions: pd.DataFrame, output_path: str) ->
   # ])
 
   # Ensure user_id is unique
-  # Keep just one of the duplicate user_id
-  all_predictions = all_predictions.drop_duplicates(subset='user_id', keep='first')
+  # # Keep just one of the duplicate user_id
+  # all_predictions = all_predictions.drop_duplicates(subset='user_id', keep='first')
   assert all_predictions['user_id'].is_unique, "user_id is not unique"
 
   # Sort by user_id
@@ -173,9 +173,9 @@ def save_predictions_to_json(all_predictions: pd.DataFrame, output_path: str) ->
 unique_user_ids = test['user_id'].unique()
 predictions = pd.DataFrame({
   'user_id': unique_user_ids,
-  'products': [[11024] * 5] * len(unique_user_ids)
+  'products': [[11024, 13295, 18048, 12639, 32544]] * len(unique_user_ids)
 })
 
 # Save the predictions to a JSON file
-output_path = os.path.join(os.path.dirname(__file__), '../../data/processed/predictions2.json')
+output_path = os.path.join(os.path.dirname(__file__), '../../data/processed/predictions44.json')
 save_predictions_to_json(predictions, output_path)
