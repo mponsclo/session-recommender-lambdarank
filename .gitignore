@@ -18,8 +18,16 @@ dist/
 target/
 dist/
 
-# JetBrains IDE
+# IDEs
 .idea/
+.vscode/
+
+# Claude
+CLAUDE.md
+.claude/
+
+# Pytest
+.pytest_cache/
 
 # Unit test reports
 TEST*.xml
