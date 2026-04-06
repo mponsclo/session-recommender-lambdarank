@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: feat_user_behavior
+    description: "Per-user behavioral features for the recommender model"
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+      - name: total_sessions
+        tests:
+          - positive_values
+      - name: discount_interaction_ratio
+        description: "Ratio of interactions with discounted products (0-1)"
+
+  - name: feat_product_popularity
+    description: "Per-product popularity and trend features"
+    columns:
+      - name: product_id
+        tests:
+          - unique
+          - not_null
+      - name: total_interactions
+        tests:
+          - positive_values
+
+  - name: feat_session_context
+    description: "Test session features for recommendation generation"
+    columns:
+      - name: session_id
+        tests:
+          - unique
+          - not_null
+
+  - name: feat_recommendation_input
+    description: "Final wide table joining all features per test session — ML handoff point"
+    columns:
+      - name: session_id
+        tests:
+          - unique
+          - not_null

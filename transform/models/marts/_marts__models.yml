@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: dim_products
+    description: "Product dimension with interaction stats and family context"
+    columns:
+      - name: product_id
+        description: "Product unique identifier"
+        tests:
+          - unique
+          - not_null
+      - name: total_interactions
+        tests:
+          - positive_values
+      - name: total_cart_additions
+        tests:
+          - positive_values
+
+  - name: dim_users
+    description: "User dimension with RFM, behavioral stats, and type classification"
+    columns:
+      - name: user_id
+        description: "User unique identifier"
+        tests:
+          - unique
+          - not_null
+      - name: user_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['known_active', 'known_inactive', 'unregistered_active', 'unknown']
+
+  - name: dim_sessions
+    description: "Session dimension with temporal features and user context"
+    columns:
+      - name: session_id
+        tests:
+          - not_null
+      - name: total_interactions
+        tests:
+          - positive_values
+
+  - name: fct_interactions
+    description: "Union of train and test interactions enriched with product attributes"
+    columns:
+      - name: session_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+      - name: data_split
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['train', 'test']

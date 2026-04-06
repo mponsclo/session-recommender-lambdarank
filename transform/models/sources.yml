@@ -1,0 +1,79 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw CSV data files for the Inditex recommender system"
+    meta:
+      external_location: "read_csv_auto('../data/raw/{name}.csv')"
+    tables:
+      - name: train
+        description: "User-session-product interactions (training set, ~46.5M rows)"
+        columns:
+          - name: session_id
+            description: "Session identifier"
+          - name: date
+            description: "Interaction date (YYYY-MM-DD)"
+          - name: timestamp_local
+            description: "Local timestamp of the interaction (ISO format)"
+          - name: add_to_cart
+            description: "Whether the product was added to cart (0 or 1)"
+          - name: user_id
+            description: "User identifier (~85% NULL for anonymous sessions)"
+          - name: country
+            description: "Country code (1-93)"
+          - name: partnumber
+            description: "Product identifier"
+          - name: device_type
+            description: "Device type used for the interaction"
+          - name: pagetype
+            description: "Page type on the e-commerce site"
+
+      - name: test
+        description: "Test set interactions (no add_to_cart column, ~29K rows)"
+        columns:
+          - name: session_id
+            description: "Session identifier"
+          - name: date
+            description: "Interaction date (YYYY-MM-DD)"
+          - name: timestamp_local
+            description: "Local timestamp of the interaction"
+          - name: user_id
+            description: "User identifier"
+          - name: country
+            description: "Country code"
+          - name: partnumber
+            description: "Product identifier"
+          - name: device_type
+            description: "Device type"
+          - name: pagetype
+            description: "Page type"
+
+      - name: products
+        description: "Product catalog with embeddings and attributes (43,692 products)"
+        columns:
+          - name: partnumber
+            description: "Product unique identifier"
+          - name: discount
+            description: "Whether product is on sale (0/1)"
+          - name: embedding
+            description: "Computer vision embedding (numpy array as string)"
+          - name: color_id
+            description: "Color identifier"
+          - name: cod_section
+            description: "Product section/category code"
+          - name: family
+            description: "Product family code"
+
+      - name: users
+        description: "User RFM metrics (577K rows, some users have multiple country rows)"
+        columns:
+          - name: user_id
+            description: "User identifier"
+          - name: country
+            description: "Country code"
+          - name: R
+            description: "Recency - days since last purchase"
+          - name: F
+            description: "Frequency - total purchase count"
+          - name: M
+            description: "Monetary - total spending"

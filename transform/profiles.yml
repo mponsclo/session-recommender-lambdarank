@@ -1,0 +1,7 @@
+inditex_recommender:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "target/inditex_recommender.duckdb"
+      threads: 4

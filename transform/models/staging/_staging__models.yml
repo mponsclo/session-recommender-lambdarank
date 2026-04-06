@@ -1,0 +1,71 @@
+version: 2
+
+models:
+  - name: stg_interactions_train
+    description: "Cleaned training interactions with standardized types and anonymous user flags"
+    columns:
+      - name: session_id
+        description: "Session identifier"
+        tests:
+          - not_null
+      - name: product_id
+        description: "Product identifier"
+        tests:
+          - not_null
+      - name: is_added_to_cart
+        description: "Whether product was added to cart (0/1)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: data_split
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['train']
+
+  - name: stg_interactions_test
+    description: "Cleaned test interactions (no cart labels)"
+    columns:
+      - name: session_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+      - name: data_split
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['test']
+
+  - name: stg_products
+    description: "Cleaned product catalog"
+    columns:
+      - name: product_id
+        description: "Product unique identifier"
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_users
+    description: "Cleaned user RFM data from CSV"
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+      - name: country_id
+        tests:
+          - not_null
+      - name: recency
+        tests:
+          - not_null
+          - positive_values
+
+  - name: stg_api_users
+    description: "Unnested API batch user data"
+    columns:
+      - name: user_id
+        tests:
+          - not_null

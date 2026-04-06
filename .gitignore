@@ -51,3 +51,18 @@ Thumbs.db
 # Data Files
 *.csv
 *.pkl
+data/raw/
+data/processed/
+
+# Models
+/models/
+
+# Virtual environment
+.venv/
+
+# dbt
+transform/target/
+transform/dbt_packages/
+transform/logs/
+*.duckdb
+*.duckdb.wal

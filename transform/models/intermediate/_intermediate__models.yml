@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: int_sessions
+    description: "Session-level aggregation of training interactions"
+    columns:
+      - name: session_id
+        tests:
+          - not_null
+      - name: total_interactions
+        tests:
+          - positive_values
+      - name: cart_addition_ratio
+        description: "Percentage of products added to cart (0-100)"
+
+  - name: int_user_product_interactions
+    description: "User-product interaction pairs with aggregated signals"
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+      - name: view_count
+        tests:
+          - positive_values
+
+  - name: int_product_stats
+    description: "Per-product global statistics from training data"
+    columns:
+      - name: product_id
+        tests:
+          - unique
+          - not_null
+      - name: total_interactions
+        tests:
+          - positive_values
+      - name: cart_addition_rate
+        description: "Rate between 0 and 1"
+
+  - name: int_user_profiles
+    description: "Merged and deduplicated user profiles from CSV + API sources"
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
