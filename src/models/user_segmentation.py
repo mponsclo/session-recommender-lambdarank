@@ -1,8 +1,7 @@
 
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+from sklearn.cluster import KMeans
 
 def normalize_rfm(users: pd.DataFrame) -> pd.DataFrame:
   """

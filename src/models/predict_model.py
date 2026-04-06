@@ -107,11 +107,6 @@ def predict_multiple_session_users_in_train(data: pd.DataFrame) -> pd.DataFrame:
   result = aggregated_data[['user_id', 'products']]
   return result
 
-# def save_predictions_to_json(single_session_users_not_in_db: pd.DataFrame, 
-#               multiple_session_users_not_in_db: pd.DataFrame, 
-#               single_session_users_in_train: pd.DataFrame, 
-#               multiple_session_users_in_train: pd.DataFrame, 
-#               output_path: str) -> None:
 def save_predictions_to_json(all_predictions: pd.DataFrame, output_path: str) -> None:
   """
   Concatenates all the predicted dataframes, ensures user_id is unique, sorts by user_id,
@@ -124,17 +119,6 @@ def save_predictions_to_json(all_predictions: pd.DataFrame, output_path: str) ->
     multiple_session_users_in_train (pd.DataFrame): Predicted data for users in the training set with multiple sessions.
     output_path (str): The path where the JSON file will be saved.
   """
-  # # Concatenate all the predicted dataframes
-  # all_predictions = pd.concat([
-  #   single_session_users_not_in_db,
-  #   multiple_session_users_not_in_db,
-  #   single_session_users_in_train,
-  #   multiple_session_users_in_train
-  # ])
-
-  # Ensure user_id is unique
-  # # Keep just one of the duplicate user_id
-  # all_predictions = all_predictions.drop_duplicates(subset='user_id', keep='first')
   assert all_predictions['user_id'].is_unique, "user_id is not unique"
 
   # Sort by user_id
@@ -150,26 +134,7 @@ def save_predictions_to_json(all_predictions: pd.DataFrame, output_path: str) ->
     f.write(json.dumps(predictions_json))
 
 
-# single_session_users_not_in_db, multiple_session_users_not_in_db, single_session_users_in_train, multiple_session_users_in_train = split_test_set(train, test)
-# single_session_users_not_in_db = predict_single_session_users_not_in_db(single_session_users_not_in_db)
-# assert single_session_users_not_in_db['user_id'].is_unique, "user_id is not unique"
-
-# multiple_session_users_not_in_db = predict_multiple_session_users_not_in_db(multiple_session_users_not_in_db)
-# assert multiple_session_users_not_in_db['user_id'].is_unique, "user_id is not unique"
-
-# single_session_users_in_train = predict_single_session_users_in_train(single_session_users_in_train)
-# assert single_session_users_in_train['user_id'].is_unique, "user_id is not unique"
-
-# multiple_session_users_in_train = predict_multiple_session_users_in_train(multiple_session_users_in_train)
-# assert multiple_session_users_in_train['user_id'].is_unique, "user_id is not unique"
-
-# # Example usage
-# output_path = os.path.join(os.path.dirname(__file__), '../../data/processed/predictions.json')
-# save_predictions_to_json(single_session_users_not_in_db, multiple_session_users_not_in_db, 
-#              single_session_users_in_train, multiple_session_users_in_train, 
-#              output_path)
-
-# Create a dataframe of unique user ids with a list of 5 items of 11024
+# Baseline predictions: assign top-performing products to all test users
 unique_user_ids = test['user_id'].unique()
 predictions = pd.DataFrame({
   'user_id': unique_user_ids,

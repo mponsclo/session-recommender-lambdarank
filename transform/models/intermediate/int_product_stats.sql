@@ -16,6 +16,7 @@ select
     min(interaction_date)                                                            as first_seen_date,
     max(interaction_date)                                                            as last_seen_date,
     -- Temporal: interactions in last 3 days vs first 3 days of the dataset
+    -- Note: dates are specific to the hackathon dataset (2024-06-01 to 2024-06-16)
     count(*) filter (where interaction_date >= '2024-06-14')                        as last_3_days_interactions,
     count(*) filter (where interaction_date <= '2024-06-03')                        as first_3_days_interactions
 from interactions

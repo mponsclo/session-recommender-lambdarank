@@ -83,7 +83,7 @@ select
     -- Device preference
     dp.preferred_device_type,
 
-    -- Recency: days since last activity (relative to dataset end)
+    -- Recency: days since last activity (relative to dataset end: 2024-06-16)
     date_diff('day', u.last_activity_date, '2024-06-16'::date) as days_since_last_activity
 
 from user_dim u

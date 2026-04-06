@@ -55,6 +55,7 @@ Thumbs.db
 *.jpg
 *.jpeg
 *.png
+!ERD.png
 
 # Data Files
 *.csv
@@ -69,6 +70,7 @@ data/processed/
 .venv/
 
 # dbt
+transform/.user.yml
 transform/target/
 transform/dbt_packages/
 transform/logs/

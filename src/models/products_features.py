@@ -64,5 +64,3 @@ products = pd.concat([products.reset_index(drop=True), encoded_df.reset_index(dr
 # Drop original categorical columns (optional)
 products = products.drop(columns=["color_id", "cod_section", "family"])
 
-# Display processed product data
-print("Processed product data:\n", products.head())
