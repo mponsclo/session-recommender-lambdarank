@@ -83,6 +83,41 @@ def build_covisitation_matrix(con, top_k=50):
     return covisit_dict
 
 
+def build_cart2cart_matrix(con, top_k=30):
+    """Build cart-to-cart co-visitation dict from training sessions."""
+    log.info("Building cart-to-cart co-visitation matrix...")
+    df = con.sql(f"""
+        WITH cart_events AS (
+            SELECT session_id, product_id
+            FROM marts.fct_interactions
+            WHERE data_split = 'train' AND is_added_to_cart = 1
+        ),
+        pairs AS (
+            SELECT a.product_id AS product_a, b.product_id AS product_b,
+                   COUNT(DISTINCT a.session_id) AS co_sessions
+            FROM cart_events a
+            JOIN cart_events b
+                ON a.session_id = b.session_id AND a.product_id < b.product_id
+            GROUP BY a.product_id, b.product_id
+            HAVING co_sessions >= 2
+        ),
+        ranked AS (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY product_a ORDER BY co_sessions DESC) AS rn
+            FROM pairs
+        )
+        SELECT product_a, product_b, co_sessions FROM ranked WHERE rn <= {top_k}
+    """).fetchdf()
+
+    # Store symmetrically
+    cart2cart_dict = defaultdict(list)
+    for _, row in df.iterrows():
+        a, b, count = int(row['product_a']), int(row['product_b']), int(row['co_sessions'])
+        cart2cart_dict[a].append((b, count))
+        cart2cart_dict[b].append((a, count))
+    log.info(f"Cart-to-cart matrix: {len(cart2cart_dict)} source products")
+    return dict(cart2cart_dict)
+
+
 # ---------------------------------------------------------------------------
 # Step 2: Train Item2Vec (Word2Vec on product sequences)
 # ---------------------------------------------------------------------------
@@ -134,7 +169,8 @@ def load_test_sessions(con):
         SELECT session_id, user_id, is_anonymous, is_returning_user, country_id,
                products_viewed, device_type, dominant_family_in_session,
                dominant_section_in_session, unique_products_in_session,
-               avg_viewed_product_cart_rate, discount_view_ratio
+               session_interaction_count, avg_viewed_product_cart_rate,
+               discount_view_ratio
         FROM features.feat_recommendation_input
     """).fetchdf()
     log.info(f"Test sessions: {len(df)}")
@@ -173,6 +209,14 @@ def load_product_catalog(con):
     for fam in family_products:
         family_products[fam].sort(key=lambda x: -x[1])
 
+    # Section -> products sorted by cart score
+    section_products = defaultdict(list)
+    for pid, info in product_info.items():
+        score = info['total_cart_additions'] * (info['cart_addition_rate'] + 0.001)
+        section_products[info['section_id']].append((pid, score))
+    for sec in section_products:
+        section_products[sec].sort(key=lambda x: -x[1])
+
     # Global top products (family-diverse: max 3 per family)
     all_products_sorted = sorted(product_info.items(), key=lambda x: -x[1]['total_cart_additions'])
     global_top = []
@@ -184,8 +228,8 @@ def load_product_catalog(con):
         if len(global_top) >= 30:
             break
 
-    log.info(f"Product catalog: {len(product_info)} products, {len(family_products)} families")
-    return product_info, dict(family_products), global_top
+    log.info(f"Product catalog: {len(product_info)} products, {len(family_products)} families, {len(section_products)} sections")
+    return product_info, dict(family_products), global_top, dict(section_products)
 
 
 def load_cv_embeddings():
@@ -225,7 +269,8 @@ def load_user_history(con):
 
 def generate_candidates(products_viewed, covisit_dict, item2vec_model,
                         product_info, family_products, global_top,
-                        cv_embeddings, cv_pid_to_idx, user_history_products):
+                        cv_embeddings, cv_pid_to_idx, user_history_products,
+                        cart2cart_dict=None, section_products=None):
     """Generate candidate products for a single session."""
     viewed_set = set(int(p) for p in products_viewed)
     candidates = defaultdict(lambda: {
@@ -235,20 +280,21 @@ def generate_candidates(products_viewed, covisit_dict, item2vec_model,
         'cv_sim_score': 0.0,
         'global_score': 0.0,
         'user_history_score': 0.0,
+        'cart2cart_score': 0.0,
+        'section_top_score': 0.0,
     })
 
     n_viewed = len(products_viewed)
 
-    # Source 1: Co-visitation
+    # Source 1: Co-visitation (allow viewed products as candidates)
     for pos, pid in enumerate(products_viewed):
         pid = int(pid)
         position_weight = 1.0 + 0.2 * (pos / max(n_viewed - 1, 1))
         if pid in covisit_dict:
             for carted_pid, co_count in covisit_dict[pid]:
-                if carted_pid not in viewed_set:
-                    candidates[carted_pid]['covisit_score'] += co_count * position_weight
+                candidates[carted_pid]['covisit_score'] += co_count * position_weight
 
-    # Source 2: Item2Vec neighbors
+    # Source 2: Item2Vec neighbors (allow viewed products as candidates)
     for pid in products_viewed:
         pid_str = str(int(pid))
         if pid_str in item2vec_model.wv:
@@ -256,12 +302,11 @@ def generate_candidates(products_viewed, covisit_dict, item2vec_model,
                 neighbors = item2vec_model.wv.most_similar(pid_str, topn=15)
                 for neighbor_str, sim in neighbors:
                     neighbor_pid = int(neighbor_str)
-                    if neighbor_pid not in viewed_set:
-                        candidates[neighbor_pid]['item2vec_score'] += sim
+                    candidates[neighbor_pid]['item2vec_score'] += sim
             except KeyError:
                 pass
 
-    # Source 3: Family top products
+    # Source 3: Family top products (allow viewed products as candidates)
     session_families = set()
     dominant_family = None
     family_count = defaultdict(int)
@@ -278,26 +323,23 @@ def generate_candidates(products_viewed, covisit_dict, item2vec_model,
         if fam in family_products:
             is_dominant = (fam == dominant_family)
             for rank, (fpid, fscore) in enumerate(family_products[fam][:15]):
-                if fpid not in viewed_set:
-                    weight = 1.0 if is_dominant else 0.5
-                    candidates[fpid]['family_top_score'] += weight / (rank + 1)
+                weight = 1.0 if is_dominant else 0.5
+                candidates[fpid]['family_top_score'] += weight / (rank + 1)
 
-    # Source 4: CV embedding similarity
+    # Source 4: CV embedding similarity (allow viewed products as candidates)
     viewed_with_emb = [int(p) for p in products_viewed if int(p) in cv_pid_to_idx]
     if viewed_with_emb:
         viewed_indices = [cv_pid_to_idx[p] for p in viewed_with_emb]
         session_emb = cv_embeddings[viewed_indices].mean(axis=0, keepdims=True)
-        # Compute similarity against all embeddings
         sims = (cv_embeddings @ session_emb.T).flatten()
         top_indices = np.argpartition(sims, -30)[-30:]
         top_indices = top_indices[np.argsort(-sims[top_indices])]
         idx_to_pid = {v: k for k, v in cv_pid_to_idx.items()}
         for idx in top_indices:
             cpid = idx_to_pid[idx]
-            if cpid not in viewed_set:
-                candidates[cpid]['cv_sim_score'] = max(
-                    candidates[cpid]['cv_sim_score'], float(sims[idx])
-                )
+            candidates[cpid]['cv_sim_score'] = max(
+                candidates[cpid]['cv_sim_score'], float(sims[idx])
+            )
 
     # Source 5: Global fallback
     for rank, gpid in enumerate(global_top):
@@ -309,6 +351,26 @@ def generate_candidates(products_viewed, covisit_dict, item2vec_model,
         for hpid in user_history_products:
             if hpid not in viewed_set:
                 candidates[hpid]['user_history_score'] = 1.0
+
+    # Source 7: Cart-to-cart co-visitation
+    if cart2cart_dict:
+        for pid in products_viewed:
+            pid = int(pid)
+            if pid in cart2cart_dict:
+                for co_pid, co_count in cart2cart_dict[pid]:
+                    candidates[co_pid]['cart2cart_score'] += co_count
+
+    # Source 8: Section top products
+    if section_products:
+        session_sections = set()
+        for pid in products_viewed:
+            pid = int(pid)
+            if pid in product_info:
+                session_sections.add(product_info[pid]['section_id'])
+        for sec in session_sections:
+            if sec in section_products:
+                for rank, (spid, _) in enumerate(section_products[sec][:10]):
+                    candidates[spid]['section_top_score'] += 1.0 / (rank + 1)
 
     return dict(candidates)
 
@@ -337,6 +399,11 @@ def compute_features(candidates, products_viewed, product_info, session_row,
     max_covisit = max((c['covisit_score'] for c in candidates.values()), default=1.0)
     if max_covisit == 0:
         max_covisit = 1.0
+
+    # Normalize cart2cart scores within session
+    max_cart2cart = max((c.get('cart2cart_score', 0) for c in candidates.values()), default=1.0)
+    if max_cart2cart == 0:
+        max_cart2cart = 1.0
 
     # Max cart additions for log normalization
     max_cart_adds = max(
@@ -402,6 +469,12 @@ def compute_features(candidates, products_viewed, product_info, session_row,
             user_hist_match,                               # 12: user_history_match
             scores['family_top_score'],                    # 13: family_top_score
             scores['global_score'],                        # 14: global_fallback_score
+            # New features (improvements 1-6)
+            1.0 if pid in viewed_set else 0.0,             # 15: is_viewed_in_session
+            scores.get('cart2cart_score', 0.0) / max_cart2cart, # 16: cart2cart_score (normalized)
+            float(session_row.get('discount_view_ratio', 0.0)), # 17: discount_view_ratio
+            min(float(session_row.get('session_interaction_count', 1)) / 20.0, 1.0), # 18: session_depth
+            scores.get('section_top_score', 0.0),          # 19: section_top_score
         ]
         features.append(feat)
         candidate_pids.append(pid)
@@ -414,6 +487,8 @@ FEATURE_NAMES = [
     'cv_embedding_sim', 'popularity', 'family_popularity_rank_inv', 'trend_bonus',
     'has_discount', 'cart_rate_vs_family_avg', 'device_type', 'is_returning_user',
     'user_history_match', 'family_top_score', 'global_fallback_score',
+    'is_viewed_in_session', 'cart2cart_score', 'discount_view_ratio',
+    'session_depth', 'section_top_score',
 ]
 
 
@@ -423,25 +498,28 @@ FEATURE_NAMES = [
 
 def build_training_data(con, covisit_dict, item2vec_model, product_info,
                         family_products, global_top, cv_embeddings, cv_pid_to_idx,
-                        user_history, max_sessions=5000):
-    """Build training data from training sessions with >= 5 cart additions."""
+                        user_history, cart2cart_dict, section_products,
+                        max_sessions=15000):
+    """Build training data from training sessions with >= 1 cart addition."""
     log.info("Building training data for LightGBM reranker...")
 
-    # Get sessions with >= 5 cart adds, focusing on sessions similar to test
+    # Include sessions with >= 1 cart add (not just >= 5) to match test distribution
     df = con.sql(f"""
-        SELECT session_id, user_id,
-               list(product_id) FILTER (WHERE is_added_to_cart = 0 OR is_added_to_cart IS NULL)
+        SELECT f.session_id, f.user_id,
+               mode(f.device_type_id) AS device_type,
+               count(*) AS interaction_count,
+               list(f.product_id) FILTER (WHERE f.is_added_to_cart = 0 OR f.is_added_to_cart IS NULL)
                    AS products_viewed,
-               list(DISTINCT product_id) FILTER (WHERE is_added_to_cart = 1)
+               list(DISTINCT f.product_id) FILTER (WHERE f.is_added_to_cart = 1)
                    AS products_carted
-        FROM marts.fct_interactions
-        WHERE data_split = 'train'
-          AND session_id IN (
+        FROM marts.fct_interactions f
+        WHERE f.data_split = 'train'
+          AND f.session_id IN (
               SELECT session_id FROM intermediate.int_sessions
-              WHERE products_added_to_cart >= 5
+              WHERE products_added_to_cart >= 1
           )
-        GROUP BY session_id, user_id
-        HAVING len(products_viewed) >= 1 AND len(products_carted) >= 5
+        GROUP BY f.session_id, f.user_id
+        HAVING len(products_viewed) >= 1 AND len(products_carted) >= 1
         ORDER BY random()
         LIMIT {max_sessions}
     """).fetchdf()
@@ -468,7 +546,8 @@ def build_training_data(con, covisit_dict, item2vec_model, product_info,
             if p not in seen:
                 seen.add(p)
                 viewed_dedup.append(p)
-        viewed = viewed_dedup
+        # Truncate to last 10 products to simulate short test sessions
+        viewed = viewed_dedup[-10:]
 
         user_id = row['user_id']
         user_hist = user_history.get(int(user_id), []) if pd.notna(user_id) else []
@@ -476,15 +555,18 @@ def build_training_data(con, covisit_dict, item2vec_model, product_info,
         candidates = generate_candidates(
             viewed, covisit_dict, item2vec_model,
             product_info, family_products, global_top,
-            cv_embeddings, cv_pid_to_idx, user_hist
+            cv_embeddings, cv_pid_to_idx, user_hist,
+            cart2cart_dict=cart2cart_dict, section_products=section_products
         )
 
         if not candidates:
             continue
 
         session_info = {
-            'device_type': 1,
+            'device_type': int(row['device_type']) if pd.notna(row['device_type']) else 1,
             'is_returning_user': bool(user_hist),
+            'discount_view_ratio': 0.0,
+            'session_interaction_count': int(row['interaction_count']) if pd.notna(row['interaction_count']) else 1,
         }
         features, candidate_pids = compute_features(
             candidates, viewed, product_info, session_info,
@@ -545,15 +627,30 @@ def train_ranker(X, y, group_sizes):
 # ---------------------------------------------------------------------------
 
 def diversified_top_k(candidate_pids, scores, product_info, k=5, max_per_family=3):
-    """Select top-k products with family diversity constraint."""
+    """Select top-k products with adaptive family diversity constraint."""
     sorted_indices = np.argsort(-scores)
+
+    # Adaptive: allow up to 4 from the dominant high-scoring family
+    adaptive_max = {}
+    if len(scores) > 0:
+        median_score = np.median(scores)
+        fam_counts_above_median = defaultdict(int)
+        for idx in sorted_indices:
+            fam = product_info.get(candidate_pids[idx], {}).get('family_id', -1)
+            if scores[idx] > median_score:
+                fam_counts_above_median[fam] += 1
+        if fam_counts_above_median:
+            top_fam = max(fam_counts_above_median, key=fam_counts_above_median.get)
+            if fam_counts_above_median[top_fam] >= 3:
+                adaptive_max[top_fam] = 4
+
     selected = []
     family_counts = defaultdict(int)
-
     for idx in sorted_indices:
         pid = candidate_pids[idx]
         fam = product_info.get(pid, {}).get('family_id', -1)
-        if family_counts[fam] < max_per_family:
+        limit = adaptive_max.get(fam, max_per_family)
+        if family_counts[fam] < limit:
             selected.append(pid)
             family_counts[fam] += 1
         if len(selected) == k:
@@ -599,15 +696,16 @@ def main():
 
     con = duckdb.connect(DB_PATH, read_only=True)
 
-    # Step 1: Co-visitation matrix
+    # Step 1: Co-visitation matrices
     covisit_dict = build_covisitation_matrix(con)
+    cart2cart_dict = build_cart2cart_matrix(con)
 
     # Step 2: Item2Vec
     item2vec_model = train_item2vec(con)
 
     # Step 3: Load data
     test_sessions = load_test_sessions(con)
-    product_info, family_products, global_top = load_product_catalog(con)
+    product_info, family_products, global_top, section_products = load_product_catalog(con)
     cv_embeddings, cv_pid_to_idx = load_cv_embeddings()
     user_history = load_user_history(con)
 
@@ -615,7 +713,8 @@ def main():
     X_train, y_train, group_sizes = build_training_data(
         con, covisit_dict, item2vec_model, product_info,
         family_products, global_top, cv_embeddings, cv_pid_to_idx,
-        user_history, max_sessions=5000
+        user_history, cart2cart_dict, section_products,
+        max_sessions=15000
     )
     ranker = train_ranker(X_train, y_train, group_sizes)
 
@@ -644,7 +743,8 @@ def main():
         candidates = generate_candidates(
             products_viewed, covisit_dict, item2vec_model,
             product_info, family_products, global_top,
-            cv_embeddings, cv_pid_to_idx, user_hist
+            cv_embeddings, cv_pid_to_idx, user_hist,
+            cart2cart_dict=cart2cart_dict, section_products=section_products
         )
 
         if not candidates:
@@ -655,6 +755,8 @@ def main():
         session_info = {
             'device_type': row.get('device_type', 1),
             'is_returning_user': bool(row.get('is_returning_user', False)),
+            'discount_view_ratio': float(row.get('discount_view_ratio', 0.0)) if pd.notna(row.get('discount_view_ratio')) else 0.0,
+            'session_interaction_count': int(row.get('session_interaction_count', 1)) if pd.notna(row.get('session_interaction_count')) else 1,
         }
         features, candidate_pids = compute_features(
             candidates, products_viewed, product_info, session_info,
