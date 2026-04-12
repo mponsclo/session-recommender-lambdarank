@@ -9,6 +9,8 @@
 
 Session-based product recommender for Inditex/Zara e-commerce, built for a NUWE hackathon challenge. Two-stage pipeline — **multi-signal candidate generation** + **LightGBM LambdaRank reranker** — handling extreme cold-start (93% of test sessions have no user history, 81% are fully anonymous). Data engineering with **dbt on DuckDB**, ranking with **LightGBM LambdaRank**, sequence embeddings with **Word2Vec/Item2Vec**.
 
+> **Scope.** This repo focuses on the recommender model and its data layer. Ingestion infrastructure and API serving are intentionally out of scope — for an end-to-end pipeline (Cloud Functions ingestion, dbt on BigQuery, FastAPI serving on Cloud Run, Terraform on GCP), see my companion repo [banking-fraud-detection-pipeline](https://github.com/mponsclo/banking-fraud-detection-pipeline).
+
 ## Results
 
 3/3 tasks complete. NDCG@5 on the offline validation set jumped **35×** from baseline.
