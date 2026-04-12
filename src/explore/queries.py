@@ -1,9 +1,10 @@
-import os
 import json
+import os
+
 import duckdb
 
 # Connect to dbt DuckDB pipeline
-DB_PATH = os.path.join(os.path.dirname(__file__), '../../transform/target/inditex_recommender.duckdb')
+DB_PATH = os.path.join(os.path.dirname(__file__), "../../transform/target/inditex_recommender.duckdb")
 con = duckdb.connect(DB_PATH, read_only=True)
 
 
@@ -12,13 +13,13 @@ def get_query_1(con):
     Q1: Which product (partnumber) with color_id equal to 3 belongs to
     the lowest family code with a discount?
     """
-    return con.sql('''
+    return con.sql("""
         SELECT product_id as partnumber
         FROM staging.stg_products
         WHERE color_id = 3 AND has_discount = 1
         ORDER BY family_id ASC
         LIMIT 1
-    ''').fetchone()[0]
+    """).fetchone()[0]
 
 
 def get_query_2(con):
@@ -27,7 +28,7 @@ def get_query_2(con):
     which is the user who has the lowest purchase frequency (F), the most recent purchase
     (highest R) and the lowest user_id? Sort priority: F ASC, R DESC, user_id ASC.
     """
-    return con.sql('''
+    return con.sql("""
         WITH country_low_m AS (
             SELECT country_id
             FROM staging.stg_users
@@ -41,7 +42,7 @@ def get_query_2(con):
         WHERE country_id = (SELECT country_id FROM country_low_m)
         ORDER BY frequency ASC, recency DESC, user_id ASC
         LIMIT 1
-    ''').fetchone()[0]
+    """).fetchone()[0]
 
 
 def get_query_3(con):
@@ -50,7 +51,7 @@ def get_query_3(con):
     how many times is a product visited before it is added to the cart on average?
     (2 decimal places)
     """
-    return con.sql('''
+    return con.sql("""
         WITH first_cart AS (
             SELECT product_id, MIN(interaction_timestamp) as first_cart_ts
             FROM staging.stg_interactions_train
@@ -67,7 +68,7 @@ def get_query_3(con):
             GROUP BY fc.product_id
         )
         SELECT ROUND(AVG(view_count), 2) FROM views_before
-    ''').fetchone()[0]
+    """).fetchone()[0]
 
 
 def get_query_4(con):
@@ -75,7 +76,7 @@ def get_query_4(con):
     Q4: Which device (device_type) is most frequently used by users to make purchases
     (add_to_cart = 1) of discounted products (discount = 1)?
     """
-    return con.sql('''
+    return con.sql("""
         SELECT t.device_type_id as device_type
         FROM staging.stg_interactions_train t
         INNER JOIN staging.stg_products p ON t.product_id = p.product_id
@@ -83,7 +84,7 @@ def get_query_4(con):
         GROUP BY t.device_type_id
         ORDER BY COUNT(*) DESC
         LIMIT 1
-    ''').fetchone()[0]
+    """).fetchone()[0]
 
 
 def get_query_5(con):
@@ -92,7 +93,7 @@ def get_query_5(con):
     who has interacted with the most products (partnumber) in sessions conducted from
     device_type = 3?
     """
-    return con.sql('''
+    return con.sql("""
         WITH ranked_users AS (
             SELECT user_id,
                 DENSE_RANK() OVER (PARTITION BY country_id ORDER BY frequency DESC) as rank
@@ -106,7 +107,7 @@ def get_query_5(con):
         GROUP BY t.user_id
         ORDER BY COUNT(DISTINCT t.product_id) DESC
         LIMIT 1
-    ''').fetchone()[0]
+    """).fetchone()[0]
 
 
 def get_query_6(con):
@@ -115,7 +116,7 @@ def get_query_6(con):
     how many unique family identifiers are there? Take into account any registered
     country for each user, as there may be more than one country per user.
     """
-    return con.sql('''
+    return con.sql("""
         WITH user_countries AS (
             SELECT user_id, country_id FROM staging.stg_users
         ),
@@ -130,7 +131,7 @@ def get_query_6(con):
         SELECT COUNT(DISTINCT p.family_id)
         FROM outside_products op
         INNER JOIN staging.stg_products p ON op.product_id = p.product_id
-    ''').fetchone()[0]
+    """).fetchone()[0]
 
 
 def get_query_7(con):
@@ -139,7 +140,7 @@ def get_query_7(con):
     page type where each family is added to the cart?
     Format: {family: pagetype}. Ties broken by smallest pagetype.
     """
-    df = con.sql('''
+    df = con.sql("""
         WITH june_cart AS (
             SELECT p.family_id, t.page_type_id, COUNT(*) as cnt
             FROM staging.stg_interactions_train t
@@ -156,8 +157,8 @@ def get_query_7(con):
             PARTITION BY family_id ORDER BY cnt DESC, page_type_id ASC
         ) = 1
         ORDER BY family_id
-    ''').df()
-    return {str(int(r['family_id'])): int(r['page_type_id']) for _, r in df.iterrows()}
+    """).df()
+    return {str(int(r["family_id"])): int(r["page_type_id"]) for _, r in df.iterrows()}
 
 
 def generate_predictions(con, output_path):
@@ -175,16 +176,16 @@ def generate_predictions(con, output_path):
     }
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(predictions, f, indent=2)
 
     return predictions
 
 
-if __name__ == '__main__':
-    output_path = os.path.join(os.path.dirname(__file__), '../../predictions/predictions_1.json')
+if __name__ == "__main__":
+    output_path = os.path.join(os.path.dirname(__file__), "../../predictions/predictions_1.json")
     results = generate_predictions(con, output_path)
-    for key, value in results['target'].items():
+    for key, value in results["target"].items():
         print(f"{key}: {value}")
     print(f"\nSaved to {output_path}")
     con.close()

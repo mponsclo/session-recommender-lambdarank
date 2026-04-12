@@ -1,0 +1,24 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [
+    ".venv",
+    "transform/target",
+    "transform/dbt_packages",
+    "notebooks",
+    "src_java",
+    "data",
+    "models",
+    "predictions",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
