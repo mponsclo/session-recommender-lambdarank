@@ -12,7 +12,7 @@ Early versions used binary classification (logistic regression / binary LightGBM
 
 ## 20 features
 
-Defined in `FEATURE_NAMES` ([train_model.py:485-492](../src/models/train_model.py#L485-L492)), computed in `compute_features()` ([train_model.py:456-478](../src/models/train_model.py#L456-L478)):
+Defined in `FEATURE_NAMES` ([train_model.py:18-39](../src/models/train_model.py#L18-L39)), computed in `compute_features()` ([predict_model.py:397-495](../src/models/predict_model.py#L397-L495)):
 
 | # | Feature | Source |
 |---|---------|--------|
@@ -39,7 +39,7 @@ Defined in `FEATURE_NAMES` ([train_model.py:485-492](../src/models/train_model.p
 
 ## Training setup
 
-From `train_ranker()` at [train_model.py:593-622](../src/models/train_model.py#L593-L622):
+From `train_ranker()` at [train_model.py:159-189](../src/models/train_model.py#L159-L189):
 
 ```python
 LGBMRanker(
@@ -57,21 +57,21 @@ LGBMRanker(
 
 ### Training data construction
 
-From `build_training_data()` at [train_model.py:499-590](../src/models/train_model.py#L499-L590):
+From `build_training_data()` at [train_model.py:42-156](../src/models/train_model.py#L42-L156):
 
-- **Sessions used**: training sessions with **≥ 1 cart addition** (line 519). Earlier versions filtered to ≥ 5 carts to match the test guarantee, but this skewed the distribution — test sessions average 4 interactions vs 53 in 5+ cart sessions. See [Lessons Learned](4-lessons-learned.md).
+- **Sessions used**: training sessions with **≥ 1 cart addition** (line 77). Earlier versions filtered to ≥ 5 carts to match the test guarantee, but this skewed the distribution — test sessions average 4 interactions vs 53 in 5+ cart sessions. See [Lessons Learned](4-lessons-learned.md).
 - **Viewed-products truncation**: last 10 products viewed per session, matching test-time distribution.
-- **Labels** (line 576): `1 if pid in carted else 0` — positives are products the user added to cart; negatives are all other candidates (viewed-but-not-carted + non-viewed recommendations from other signals).
+- **Labels** (line 140): `1 if pid in carted else 0` — positives are products the user added to cart; negatives are all other candidates (viewed-but-not-carted + non-viewed recommendations from other signals).
 - **Groups**: one group per session; `group_sizes` list of `len(candidate_pids)` per session is passed directly to `LGBMRanker.fit(group=...)`.
 
 ## Adaptive family diversification
 
-Applied at inference time in `diversified_top_k()` ([predict_model.py:629-668](../src/models/predict_model.py#L629-L668)). Selects the top 5 with a per-family cap that flexes based on candidate quality:
+Applied at inference time in `diversified_top_k()` ([predict_model.py:503-542](../src/models/predict_model.py#L503-L542)). Selects the top 5 with a per-family cap that flexes based on candidate quality:
 
 1. **Baseline cap**: max 3 products per family.
-2. **Adaptive bump** ([predict_model.py:632-645](../src/models/predict_model.py#L632-L645)): if the dominant family has ≥ 3 candidates scoring above the session median, raise its cap to 4. Rationale — when a family legitimately dominates (e.g., a user clearly shopping for one category), hard caps hurt more than they help.
-3. **Selection loop** ([predict_model.py:647-657](../src/models/predict_model.py#L647-L657)): iterate candidates sorted by score; skip if family already at cap; stop at k=5.
-4. **Fallback fill** ([predict_model.py:660-666](../src/models/predict_model.py#L660-L666)): if fewer than 5 selected after the cap-respecting pass, top up from the remaining pool to guarantee exactly 5.
+2. **Adaptive bump** ([predict_model.py:507-519](../src/models/predict_model.py#L507-L519)): if the dominant family has ≥ 3 candidates scoring above the session median, raise its cap to 4. Rationale — when a family legitimately dominates (e.g., a user clearly shopping for one category), hard caps hurt more than they help.
+3. **Selection loop** ([predict_model.py:521-531](../src/models/predict_model.py#L521-L531)): iterate candidates sorted by score; skip if family already at cap; stop at k=5.
+4. **Fallback fill** ([predict_model.py:533-540](../src/models/predict_model.py#L533-L540)): if fewer than 5 selected after the cap-respecting pass, top up from the remaining pool to guarantee exactly 5.
 
 ## Results
 
@@ -83,6 +83,6 @@ Offline on 1,000 held-out training sessions with 5+ cart additions:
 | v1 (initial pipeline, binary classifier) | 0.214 | 45.5% |
 | v2 (LambdaRank + adaptive diversification + viewed-products + retrained on 1+ cart sessions) | **0.377** | **76.0%** |
 
-Top features by LightGBM importance (logged at [train_model.py:615-620](../src/models/train_model.py#L615-L620)): `covisit_score`, `popularity`, `item2vec_score`, `session_depth`, `cart_rate_vs_family_avg`, `cart2cart_score`.
+Top features by LightGBM importance (logged at [train_model.py:183-187](../src/models/train_model.py#L183-L187)): `covisit_score`, `popularity`, `item2vec_score`, `session_depth`, `cart_rate_vs_family_avg`, `cart2cart_score`.
 
 > **Note**: validation uses training data that overlaps with the co-visitation matrix, so these scores are optimistic. Real test performance may differ.

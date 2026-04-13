@@ -8,7 +8,7 @@ Four decisions that shaped the final pipeline — including two reversals from t
 
 **Why it failed.** 5+ cart sessions average **53 interactions**; test sessions average **4**. The LambdaRank learned patterns that only exist in deep sessions: dense co-visitation graphs, strong family concentration, rich user trajectories. At inference on short test sessions, those features were mostly zero, and the model had never learned to rank well under that regime.
 
-**What I changed.** Dropped the filter to **≥ 1 cart addition** and **truncated viewed products to the last 10** per training session ([train_model.py:499-590](../src/models/train_model.py#L499-L590)). This made training sessions distributionally identical to test.
+**What I changed.** Dropped the filter to **≥ 1 cart addition** and **truncated viewed products to the last 10** per training session ([train_model.py:42-156](../src/models/train_model.py#L42-L156)). This made training sessions distributionally identical to test.
 
 **Result.** NDCG@5: **0.214 → 0.377** (+76% relative). Largest single lift in the project.
 
@@ -28,7 +28,7 @@ Four decisions that shaped the final pipeline — including two reversals from t
 
 **Why it failed.** For sessions where a user is clearly shopping within one family (e.g., a user viewing 8 dresses), the hard cap forced 2 slots to unrelated families with weaker scores. The displaced predictions were genuine leaders in the session-specific ranking.
 
-**What I changed.** Adaptive cap in `diversified_top_k()` ([predict_model.py:629-668](../src/models/predict_model.py#L629-L668)): if the dominant family has ≥ 3 candidates scoring above the session median, raise its cap from 3 to 4. Median-based threshold ensures this only triggers when the dominant family legitimately has high-quality candidates, not just many low-scoring ones.
+**What I changed.** Adaptive cap in `diversified_top_k()` ([predict_model.py:503-542](../src/models/predict_model.py#L503-L542)): if the dominant family has ≥ 3 candidates scoring above the session median, raise its cap from 3 to 4. Median-based threshold ensures this only triggers when the dominant family legitimately has high-quality candidates, not just many low-scoring ones.
 
 **Result.** NDCG@5: **+0.015** over hard cap. Not the biggest single lift, but removed a class of systematic errors on focused sessions.
 
@@ -38,7 +38,7 @@ Four decisions that shaped the final pipeline — including two reversals from t
 
 **Why it failed.** NDCG@5 is a ranking metric — it only cares about the relative order of products within a session, not absolute probabilities. A well-calibrated binary classifier can still produce the wrong ordering if calibration drifts across sessions with different density. Also: `scale_pos_weight` uniformly boosts all positives regardless of difficulty; popularity-weighted negatives (which LambdaRank handles via group-aware pair sampling) matter more here.
 
-**What I changed.** Switched to `LGBMRanker` with `objective='lambdarank'`, `metric='ndcg'`, `eval_at=[5]`, and session-level groups ([train_model.py:593-622](../src/models/train_model.py#L593-L622)). Same features, same candidates, same training data — just a different loss.
+**What I changed.** Switched to `LGBMRanker` with `objective='lambdarank'`, `metric='ndcg'`, `eval_at=[5]`, and session-level groups ([train_model.py:159-189](../src/models/train_model.py#L159-L189)). Same features, same candidates, same training data — just a different loss.
 
 **Result.** NDCG@5: **+0.05** over the tuned binary classifier. More importantly, it simplified hyperparameter search — direct NDCG optimization means validation score is the thing you're optimizing, not a proxy.
 

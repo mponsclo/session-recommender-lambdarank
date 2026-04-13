@@ -2,6 +2,9 @@
 
 All transformations live in [transform/](../transform/) and are managed by dbt against a local DuckDB file ([transform/target/inditex_recommender.duckdb](../transform/)). Four materialization layers, each with a single responsibility.
 
+![dbt model lineage](lineage.png)
+*Model lineage captured from `dbt docs serve` → Lineage Graph. Dependencies flow left-to-right: raw CSVs → staging → intermediate → marts → features.*
+
 ## Layer overview
 
 ```
@@ -46,6 +49,11 @@ Dimensional model for reuse by both analytics (Task 1) and ML (Task 3):
 | `dim_users` | User dimension: RFM + behavioral stats + user type classification |
 | `dim_sessions` | Session dimension: temporal features + user context |
 | `fct_interactions` | Union of train + test interactions enriched with product attributes (family, section, color, discount) |
+
+### Dimensional model
+
+![ERD for the marts layer](ERD.png)
+*Star schema across `dim_products`, `dim_users`, `dim_sessions`, `fct_interactions`. Every Task 3 feature traces back to these four tables.*
 
 ## Features ([transform/models/features/](../transform/models/features/))
 
