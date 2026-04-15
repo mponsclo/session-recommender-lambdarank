@@ -2,8 +2,59 @@
 
 All transformations live in [transform/](../transform/) and are managed by dbt against a local DuckDB file ([transform/target/inditex_recommender.duckdb](../transform/)). Four materialization layers, each with a single responsibility.
 
-![dbt model lineage](lineage.png)
-*Model lineage captured from `dbt docs serve` → Lineage Graph. Dependencies flow left-to-right: raw CSVs → staging → intermediate → marts → features.*
+```mermaid
+flowchart LR
+    classDef staging fill:#dbeafe,stroke:#1e40af,color:#1e3a8a
+    classDef intermediate fill:#fef3c7,stroke:#b45309,color:#78350f
+    classDef marts fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef features fill:#ede9fe,stroke:#6d28d9,color:#4c1d95
+
+    stg_train[stg_interactions_train]:::staging
+    stg_test[stg_interactions_test]:::staging
+    stg_products[stg_products]:::staging
+    stg_users[stg_users]:::staging
+    stg_api_users[stg_api_users]:::staging
+
+    int_sessions[int_sessions]:::intermediate
+    int_product_stats[int_product_stats]:::intermediate
+    int_user_profiles[int_user_profiles]:::intermediate
+    int_upi[int_user_product_interactions]:::intermediate
+
+    dim_products[dim_products]:::marts
+    dim_users[dim_users]:::marts
+    dim_sessions[dim_sessions]:::marts
+    fct_interactions[fct_interactions]:::marts
+
+    feat_pop[feat_product_popularity]:::features
+    feat_user[feat_user_behavior]:::features
+    feat_session[feat_session_context]:::features
+    feat_input[feat_recommendation_input]:::features
+
+    stg_train --> int_sessions & int_product_stats & int_upi
+    stg_users --> int_user_profiles
+    stg_api_users --> int_user_profiles
+
+    stg_products --> dim_products
+    int_product_stats --> dim_products
+    int_user_profiles --> dim_users
+    stg_train --> dim_users & fct_interactions
+    stg_test --> fct_interactions
+    stg_products --> fct_interactions
+    int_sessions --> dim_sessions
+    dim_users --> dim_sessions
+
+    dim_products --> feat_pop
+    int_product_stats --> feat_pop
+    stg_train --> feat_pop & feat_user & feat_session
+    stg_products --> feat_user & feat_session
+    int_sessions --> feat_user
+    dim_users --> feat_user
+    stg_test --> feat_session & feat_input
+    feat_session --> feat_input
+    feat_user --> feat_input
+    feat_pop --> feat_input
+```
+*Model lineage derived from dbt `ref()` calls. Dependencies flow left-to-right: staging → intermediate → marts → features.*
 
 ## Layer overview
 
