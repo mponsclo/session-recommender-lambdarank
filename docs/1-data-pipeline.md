@@ -9,52 +9,32 @@ flowchart LR
     classDef marts fill:#dcfce7,stroke:#15803d,color:#14532d
     classDef features fill:#ede9fe,stroke:#6d28d9,color:#4c1d95
 
-    stg_train[stg_interactions_train]:::staging
-    stg_test[stg_interactions_test]:::staging
-    stg_products[stg_products]:::staging
-    stg_users[stg_users]:::staging
-    stg_api_users[stg_api_users]:::staging
+    subgraph S["Staging (views)"]
+      direction TB
+      stg["stg_interactions_train / _test<br/>stg_products<br/>stg_users / stg_api_users"]:::staging
+    end
 
-    int_sessions[int_sessions]:::intermediate
-    int_product_stats[int_product_stats]:::intermediate
-    int_user_profiles[int_user_profiles]:::intermediate
-    int_upi[int_user_product_interactions]:::intermediate
+    subgraph I["Intermediate (tables)"]
+      direction TB
+      int["int_sessions · int_product_stats<br/>int_user_profiles<br/>int_user_product_interactions"]:::intermediate
+    end
 
-    dim_products[dim_products]:::marts
-    dim_users[dim_users]:::marts
-    dim_sessions[dim_sessions]:::marts
-    fct_interactions[fct_interactions]:::marts
+    subgraph M["Marts (tables)"]
+      direction TB
+      mart["dim_products · dim_users<br/>dim_sessions · fct_interactions"]:::marts
+    end
 
-    feat_pop[feat_product_popularity]:::features
-    feat_user[feat_user_behavior]:::features
-    feat_session[feat_session_context]:::features
-    feat_input[feat_recommendation_input]:::features
+    subgraph F["Features (tables)"]
+      direction TB
+      feats["feat_product_popularity<br/>feat_user_behavior<br/>feat_session_context"]:::features
+      input["feat_recommendation_input<br/>(final wide table)"]:::features
+      feats --> input
+    end
 
-    stg_train --> int_sessions & int_product_stats & int_upi
-    stg_users --> int_user_profiles
-    stg_api_users --> int_user_profiles
-
-    stg_products --> dim_products
-    int_product_stats --> dim_products
-    int_user_profiles --> dim_users
-    stg_train --> dim_users & fct_interactions
-    stg_test --> fct_interactions
-    stg_products --> fct_interactions
-    int_sessions --> dim_sessions
-    dim_users --> dim_sessions
-
-    dim_products --> feat_pop
-    int_product_stats --> feat_pop
-    stg_train --> feat_pop & feat_user & feat_session
-    stg_products --> feat_user & feat_session
-    int_sessions --> feat_user
-    dim_users --> feat_user
-    stg_test --> feat_session & feat_input
-    feat_session --> feat_input
-    feat_user --> feat_input
-    feat_pop --> feat_input
+    S --> I --> M --> F
+    S -.->|raw signals| F
 ```
-*Model lineage derived from dbt `ref()` calls. Dependencies flow left-to-right: staging → intermediate → marts → features.*
+*Layer-level lineage. Models flow left-to-right: staging → intermediate → marts → features. Some feature models also read staging directly (dotted edge); per-model dependencies are listed in the tables below.*
 
 ## Layer overview
 

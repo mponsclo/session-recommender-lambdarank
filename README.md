@@ -44,37 +44,14 @@ Session-based product recommender for Inditex/Zara e-commerce, built for a NUWE 
 ## Architecture
 
 ```mermaid
-graph LR
-  subgraph Signals["Candidate Generation &mdash; 8 signals"]
-    direction TB
-    CoVis["View&rarr;Cart<br/>co-visitation"]:::storage
-    Cart2Cart["Cart&rarr;Cart<br/>co-visitation"]:::storage
-    Item2Vec["Item2Vec<br/>(Word2Vec)"]:::storage
-    CVEmb["CV embeddings<br/>(1280-dim)"]:::storage
-    FamTop["Family top<br/>products"]:::storage
-    SecTop["Section top<br/>products"]:::storage
-    UserHist["User history<br/>(returning)"]:::storage
-    Popular["Global<br/>popularity"]:::storage
-  end
+flowchart LR
+  CG["<b>Stage 1: Candidate Generation</b><br/>&bull; Co-visitation (View&rarr;Cart, Cart&rarr;Cart)<br/>&bull; Embeddings (Item2Vec, CV 1280-d)<br/>&bull; Metadata (Family top, Section top)<br/>&bull; User history &amp; global popularity"]:::storage
 
-  subgraph Ranking["Ranking"]
-    LGBM["LightGBM LambdaRank<br/>20 features &bull; direct NDCG@5<br/><b>NDCG@5 = 0.377</b>"]:::ml
-  end
+  LGBM["<b>Stage 2: LambdaRank</b><br/>LightGBM &bull; 20 features<br/>direct NDCG@5 optimization<br/><b>NDCG@5 = 0.377</b>"]:::ml
 
-  subgraph Post["Post-processing"]
-    Divers["Adaptive family<br/>diversification"]:::compute
-    Top5["Top 5<br/>per session"]:::compute
-  end
+  Post["<b>Post-processing</b><br/>Adaptive diversification<br/>Top-5 per session"]:::compute
 
-  CoVis --> LGBM
-  Cart2Cart --> LGBM
-  Item2Vec --> LGBM
-  CVEmb --> LGBM
-  FamTop --> LGBM
-  SecTop --> LGBM
-  UserHist --> LGBM
-  Popular --> LGBM
-  LGBM --> Divers --> Top5
+  CG --> LGBM --> Post
 
   classDef storage fill:#d6eaf8,stroke:#2e86c1,color:#1a1a1a
   classDef compute fill:#d5f5e3,stroke:#1e8449,color:#1a1a1a
@@ -148,7 +125,10 @@ Run `make help` to see all targets.
 │   │   └── queries.py           # Task 1: 7 SQL queries
 │   └── models/
 │       ├── predict_model.py     # Task 3: two-stage inference pipeline
-│       └── train_model.py       # Task 3: LambdaRank training
+│       ├── train_model.py       # Task 3: LambdaRank training
+│       ├── prepare_data.py      # Exploratory: RFM user prep (legacy, not in main pipeline)
+│       ├── products_features.py # Exploratory: product similarity (legacy)
+│       └── user_segmentation.py # Exploratory: KMeans RFM segmentation (legacy)
 ├── src_java/                    # Java fallback for Task 2 (Tablesaw + pom.xml)
 ├── transform/                   # dbt project (DuckDB)
 │   └── models/                  # staging → intermediate → marts → features
